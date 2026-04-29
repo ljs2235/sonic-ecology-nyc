@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sonic Ecology of New York City</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --refuge:    #4ade80;
+    --contested: #facc15;
+    --burden:    #f87171;
+    --void:      #94a3b8;
+    --bg:        #060b14;
+    --panel:     rgba(6,11,20,0.92);
+    --border:    rgba(255,255,255,0.08);
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --mono:      'DM Mono', monospace;
+    --serif:     'Cormorant Garamond', serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:var(--mono); height:100vh; overflow:hidden; }
+  #map { width:100%; height:100vh; }
+
+  #header {
+    position:absolute; top:0; left:0; right:0; z-index:10;
+    padding:20px 28px 16px;
+    background:linear-gradient(to bottom,rgba(6,11,20,0.95) 60%,transparent);
+    pointer-events:none;
+  }
+  #header h1 { font-family:var(--serif); font-size:28px; font-weight:300; font-style:italic; letter-spacing:0.01em; line-height:1.1; color:#f8fafc; }
+  #header p  { font-family:var(--mono); font-size:10px; font-weight:300; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-top:4px; }
+
+  #legend {
+    position:absolute; bottom:32px; left:24px; z-index:10;
+    background:var(--panel); border:0.5px solid var(--border); border-radius:4px;
+    padding:14px 16px; backdrop-filter:blur(12px); min-width:210px;
+  }
+  #legend h3 { font-size:9px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .legend-item { display:flex; align-items:center; gap:9px; margin-bottom:7px; cursor:pointer; transition:opacity 0.2s; }
+  .legend-item:last-child { margin-bottom:0; }
+  .legend-item:hover { opacity:0.7; }
+  .legend-dot { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+  .legend-label { font-size:11px; font-weight:300; color:var(--text); letter-spacing:0.02em; }
+  .legend-count { font-size:10px; color:var(--muted); margin-left:auto; }
+
+  #popup-panel {
+    position:absolute; top:80px; right:24px; z-index:10; width:300px;
+    background:var(--panel); border:0.5px solid var(--border); border-radius:4px;
+    backdrop-filter:blur(16px);
+    opacity:0; transform:translateX(12px);
+    transition:opacity 0.25s ease,transform 0.25s ease;
+    pointer-events:none;
+  }
+  #popup-panel.visible { opacity:1; transform:translateX(0); pointer-events:all; }
+  #popup-type-bar { height:3px; border-radius:4px 4px 0 0; transition:background 0.3s; }
+  #popup-inner { padding:16px 18px 18px; }
+  #close-btn { position:absolute; top:10px; right:10px; width:22px; height:22px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); font-size:16px; border-radius:2px; transition:color 0.15s; z-index:1; }
+  #close-btn:hover { color:var(--text); }
+  #popup-type-label { font-size:9px; font-weight:500; letter-spacing:0.16em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+  #popup-borough { font-family:var(--serif); font-size:22px; font-weight:300; font-style:italic; color:#f8fafc; margin-bottom:14px; line-height:1.1; }
+
+  .score-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .score-label { font-size:10px; font-weight:300; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); width:68px; flex-shrink:0; }
+  .score-bar-wrap { flex:1; height:3px; background:rgba(255,255,255,0.07); border-radius:2px; overflow:hidden; }
+  .score-bar-fill { height:100%; border-radius:2px; transition:width 0.4s ease; }
+  .score-val { font-size:11px; font-weight:400; color:var(--text); width:28px; text-align:right; flex-shrink:0; }
+
+  .divider { height:0.5px; background:var(--border); margin:12px 0; }
+
+  .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+  .stat-item .sl { font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:2px; }
+  .stat-item .sv { font-size:13px; font-weight:400; color:var(--text); }
+
+  .bird-row { display:flex; align-items:center; gap:8px; padding:8px 10px; background:rgba(255,255,255,0.04); border-radius:3px; margin-bottom:12px; }
+  .bird-info .bl { font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); }
+  .bird-info .bn { font-size:13px; font-weight:400; color:var(--text); font-style:italic; font-family:var(--serif); }
+
+  .audio-label { font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .audio-btns { display:flex; gap:8px; }
+  .audio-btn {
+    flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+    padding:8px 10px; background:rgba(255,255,255,0.05); border:0.5px solid var(--border);
+    border-radius:3px; cursor:pointer; font-family:var(--mono); font-size:10px;
+    font-weight:300; letter-spacing:0.06em; color:var(--text);
+    transition:background 0.15s,border-color 0.15s;
+  }
+  .audio-btn:hover { background:rgba(255,255,255,0.09); }
+  .audio-btn.playing { border-color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.1); }
+  .play-icon { width:14px; height:14px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .eq { display:none; gap:2px; align-items:flex-end; height:12px; }
+  .eq.active { display:flex; }
+  .eq span { width:2px; background:currentColor; border-radius:1px; animation:eq-bar 0.8s ease-in-out infinite alternate; }
+  .eq span:nth-child(1){height:4px;animation-delay:0s}
+  .eq span:nth-child(2){height:8px;animation-delay:0.15s}
+  .eq span:nth-child(3){height:5px;animation-delay:0.3s}
+  .eq span:nth-child(4){height:10px;animation-delay:0.1s}
+  @keyframes eq-bar { from{transform:scaleY(0.4)} to{transform:scaleY(1.0)} }
+
+  .audio-note { font-size:9px; color:var(--muted); margin-top:8px; letter-spacing:0.04em; line-height:1.6; }
+  .audio-note a { color:#60a5fa; text-decoration:none; }
+  .audio-note a:hover { text-decoration:underline; }
+
+  #hover-tip {
+    position:absolute; z-index:9; background:var(--panel); border:0.5px solid var(--border);
+    border-radius:3px; padding:6px 10px; font-size:10px; font-weight:300;
+    pointer-events:none; opacity:0; transition:opacity 0.1s; white-space:nowrap; backdrop-filter:blur(8px);
+  }
+  #hover-tip.visible { opacity:1; }
+  .mapboxgl-ctrl-bottom-right,.mapboxgl-ctrl-bottom-left { display:none; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="header">
+  <h1>The Sonic Ecology of New York City</h1>
+  <p>Mapping the uneven distribution of natural &amp; mechanical sound · 500m grid · click any cell</p>
+</div>
+
+<div id="legend">
+  <h3>Sonic typology</h3>
+  <div class="legend-item" data-type="Sonic Refuge">
+    <div class="legend-dot" style="background:var(--refuge)"></div>
+    <span class="legend-label">Sonic Refuge</span>
+    <span class="legend-count" id="cnt-refuge">—</span>
+  </div>
+  <div class="legend-item" data-type="Contested Soundscape">
+    <div class="legend-dot" style="background:var(--contested)"></div>
+    <span class="legend-label">Contested Soundscape</span>
+    <span class="legend-count" id="cnt-contested">—</span>
+  </div>
+  <div class="legend-item" data-type="Sonic Burden Zone">
+    <div class="legend-dot" style="background:var(--burden)"></div>
+    <span class="legend-label">Sonic Burden Zone</span>
+    <span class="legend-count" id="cnt-burden">—</span>
+  </div>
+  <div class="legend-item" data-type="Acoustic Void">
+    <div class="legend-dot" style="background:var(--void)"></div>
+    <span class="legend-label">Acoustic Void</span>
+    <span class="legend-count" id="cnt-void">—</span>
+  </div>
+  <div class="legend-item" data-type="No Data">
+    <div class="legend-dot" style="background:#1e293b"></div>
+    <span class="legend-label">No data</span>
+    <span class="legend-count" id="cnt-nodata">—</span>
+  </div>
+</div>
+
+<div id="popup-panel">
+  <div id="popup-type-bar"></div>
+  <div id="popup-inner">
+    <div id="close-btn" onclick="closePanel()">✕</div>
+    <div id="popup-type-label"></div>
+    <div id="popup-borough"></div>
+    <div class="score-row">
+      <span class="score-label">Natural</span>
+      <div class="score-bar-wrap"><div class="score-bar-fill" id="bar-natural"></div></div>
+      <span class="score-val" id="val-natural">—</span>
+    </div>
+    <div class="score-row">
+      <span class="score-label">Mechanical</span>
+      <div class="score-bar-wrap"><div class="score-bar-fill" id="bar-mech" style="background:var(--burden)"></div></div>
+      <span class="score-val" id="val-mech">—</span>
+    </div>
+    <div class="score-row">
+      <span class="score-label">EJ Burden</span>
+      <div class="score-bar-wrap"><div class="score-bar-fill" id="bar-ej" style="background:#a78bfa"></div></div>
+      <span class="score-val" id="val-ej">—</span>
+    </div>
+    <div class="divider"></div>
+    <div class="stat-grid">
+      <div class="stat-item"><div class="sl">Bird species</div><div class="sv" id="stat-birds">—</div></div>
+      <div class="stat-item"><div class="sl">Street trees</div><div class="sv" id="stat-trees">—</div></div>
+      <div class="stat-item"><div class="sl">Noise complaints</div><div class="sv" id="stat-noise">—</div></div>
+      <div class="stat-item"><div class="sl">Median income</div><div class="sv" id="stat-income">—</div></div>
+    </div>
+    <div class="bird-row">
+      <div class="bird-info">
+        <div class="bl">Most observed species</div>
+        <div class="bn" id="stat-top-bird">—</div>
+      </div>
+    </div>
+    <div class="audio-label">Listen to this cell</div>
+    <div class="audio-btns">
+      <button class="audio-btn" id="btn-natural" onclick="playAudio('natural')">
+        <div class="play-icon" id="icon-natural"><svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor"><path d="M0 0l10 6-10 6z"/></svg></div>
+        <div class="eq" id="eq-natural"><span></span><span></span><span></span><span></span></div>
+        <span>Natural</span>
+      </button>
+      <button class="audio-btn" id="btn-mech" onclick="playAudio('mech')">
+        <div class="play-icon" id="icon-mech"><svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor"><path d="M0 0l10 6-10 6z"/></svg></div>
+        <div class="eq" id="eq-mech"><span></span><span></span><span></span><span></span></div>
+        <span>Mechanical</span>
+      </button>
+    </div>
+    <div class="audio-note" id="audio-note"></div>
+  </div>
+</div>
+
+<div id="hover-tip"></div>
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoibHVjYXNqczMiLCJhIjoiY204c3hpZnVqMDRvYjJ5b3FkNjJ6a3lhYyJ9.QtnIt2S1RbkgqfJjoMgDJg';
+
+// ── AUDIO MAPPINGS ──────────────────────────────────────────────────────────
+// Birds: map every species that appears in the dataset to the closest sound file.
+// Species without an exact recording fall back to the most sonically similar one.
+const BIRD_AUDIO = {
+  // Exact matches — files you provided
+  'American robin':           'audio/birds/american_robin.mp3',
+  'Blue jay':                 'audio/birds/blue_jay.mp3',
+  'Brown-headed cowbird':     'audio/birds/brown_headed_cowbird.mp3',
+  'Canada goose':             'audio/birds/canada_goose.mp3',
+  'Carolina wren':            'audio/birds/carolina_wren.mp3',
+  'Northern flicker':         'audio/birds/northern_flicker.mp3',
+  'Northern waterthrush':     'audio/birds/northern_waterthrush.mp3',
+  'Red-bellied woodpecker':   'audio/birds/red_bellied_woodpecker.mp3',
+  'Red-tailed hawk':          'audio/birds/red_tailed_hawk.mp3',
+  'Ring-billed gull':         'audio/birds/ring_billed_gull.mp3',
+  'Song sparrow':             'audio/birds/song_sparrow.mp3',
+
+  // Fallbacks — mapped to closest available sound
+  // Songbirds → american_robin (melodic, common)
+  'American Goldfinch':         'audio/birds/song_sparrow.mp3',
+  'American black duck':        'audio/birds/canada_goose.mp3',
+  'American crow':              'audio/birds/blue_jay.mp3',
+  'American herring gull':      'audio/birds/ring_billed_gull.mp3',
+  'American kestrel':           'audio/birds/red_tailed_hawk.mp3',
+  'American oystercatcher':     'audio/birds/ring_billed_gull.mp3',
+  'American redstart':          'audio/birds/northern_waterthrush.mp3',
+  'American woodcock':          'audio/birds/song_sparrow.mp3',
+  'Bald eagle':                 'audio/birds/red_tailed_hawk.mp3',
+  'Baltimore Oriole':           'audio/birds/american_robin.mp3',
+  'Barn swallow':               'audio/birds/carolina_wren.mp3',
+  'Black-and-white warbler':    'audio/birds/northern_waterthrush.mp3',
+  'Black-capped chickadee':     'audio/birds/carolina_wren.mp3',
+  'Black-crowned night heron':  'audio/birds/canada_goose.mp3',
+  'Black-throated blue warbler':'audio/birds/northern_waterthrush.mp3',
+  'Black-throated green warbler':'audio/birds/northern_waterthrush.mp3',
+  'Blackburnian warbler':       'audio/birds/northern_waterthrush.mp3',
+  'Blackpoll warbler':          'audio/birds/song_sparrow.mp3',
+  'Brant':                      'audio/birds/canada_goose.mp3',
+  'Brown creeper':              'audio/birds/carolina_wren.mp3',
+  'Bufflehead':                 'audio/birds/canada_goose.mp3',
+  'Cedar waxwing':              'audio/birds/american_robin.mp3',
+  'Chipping sparrow':           'audio/birds/song_sparrow.mp3',
+  'Common grackle':             'audio/birds/brown_headed_cowbird.mp3',
+  'Common raven':               'audio/birds/blue_jay.mp3',
+  'Common starling':            'audio/birds/american_robin.mp3',
+  'Common tern':                'audio/birds/ring_billed_gull.mp3',
+  'Common yellowthroat':        'audio/birds/northern_waterthrush.mp3',
+  'Dark-eyed junco':            'audio/birds/song_sparrow.mp3',
+  'Double-crested cormorant':   'audio/birds/ring_billed_gull.mp3',
+  'Downy woodpecker':           'audio/birds/red_bellied_woodpecker.mp3',
+  'Eastern kingbird':           'audio/birds/american_robin.mp3',
+  'Eastern phoebe':             'audio/birds/carolina_wren.mp3',
+  'Eastern towhee':             'audio/birds/song_sparrow.mp3',
+  'Eurasian teal':              'audio/birds/canada_goose.mp3',
+  'Fox sparrow':                'audio/birds/song_sparrow.mp3',
+  'Gadwall':                    'audio/birds/canada_goose.mp3',
+  'Golden-crowned kinglet':     'audio/birds/carolina_wren.mp3',
+  'Gray catbird':               'audio/birds/american_robin.mp3',
+  'Great black-backed gull':    'audio/birds/ring_billed_gull.mp3',
+  'Great blue heron':           'audio/birds/canada_goose.mp3',
+  'Great egret':                'audio/birds/ring_billed_gull.mp3',
+  'Green heron':                'audio/birds/canada_goose.mp3',
+  'Hermit thrush':              'audio/birds/american_robin.mp3',
+  'Hooded merganser':           'audio/birds/canada_goose.mp3',
+  'House finch':                'audio/birds/song_sparrow.mp3',
+  'House sparrow':              'audio/birds/song_sparrow.mp3',
+  'Killdeer':                   'audio/birds/ring_billed_gull.mp3',
+  'Laughing gull':              'audio/birds/ring_billed_gull.mp3',
+  'Magnolia warbler':           'audio/birds/northern_waterthrush.mp3',
+  'Mallard':                    'audio/birds/canada_goose.mp3',
+  'Merlin':                     'audio/birds/red_tailed_hawk.mp3',
+  'Monk parakeet':              'audio/birds/blue_jay.mp3',
+  'Mourning dove':              'audio/birds/american_robin.mp3',
+  'Mute swan':                  'audio/birds/canada_goose.mp3',
+  'Northern Yellow Warbler':    'audio/birds/northern_waterthrush.mp3',
+  'Northern cardinal':          'audio/birds/american_robin.mp3',
+  'Northern mockingbird':       'audio/birds/american_robin.mp3',
+  'Northern parula':            'audio/birds/northern_waterthrush.mp3',
+  'Northern shoveler':          'audio/birds/canada_goose.mp3',
+  'Not Found':                  'audio/birds/american_robin.mp3',
+  'Osprey':                     'audio/birds/red_tailed_hawk.mp3',
+  'Ovenbird':                   'audio/birds/northern_waterthrush.mp3',
+  'Palm warbler':               'audio/birds/song_sparrow.mp3',
+  'Peregrine falcon':           'audio/birds/red_tailed_hawk.mp3',
+  'Pine warbler':               'audio/birds/song_sparrow.mp3',
+  'Red-breasted merganser':     'audio/birds/canada_goose.mp3',
+  'Red-eyed vireo':             'audio/birds/american_robin.mp3',
+  'Red-winged blackbird':       'audio/birds/brown_headed_cowbird.mp3',
+  'Rock dove':                  'audio/birds/american_robin.mp3',
+  'Ruby-crowned kinglet':       'audio/birds/carolina_wren.mp3',
+  'Ruby-throated hummingbird':  'audio/birds/carolina_wren.mp3',
+  'Ruddy duck':                 'audio/birds/canada_goose.mp3',
+  'Savannah sparrow':           'audio/birds/song_sparrow.mp3',
+  'Scarlet tanager':            'audio/birds/american_robin.mp3',
+  'Snowy egret':                'audio/birds/ring_billed_gull.mp3',
+  'Swamp sparrow':              'audio/birds/song_sparrow.mp3',
+  'Tree swallow':               'audio/birds/carolina_wren.mp3',
+  'Tufted titmouse':            'audio/birds/carolina_wren.mp3',
+  'Turkey vulture':             'audio/birds/red_tailed_hawk.mp3',
+  'White-breasted nuthatch':    'audio/birds/carolina_wren.mp3',
+  'White-throated sparrow':     'audio/birds/song_sparrow.mp3',
+  'Wild turkey':                'audio/birds/brown_headed_cowbird.mp3',
+  'Wood duck':                  'audio/birds/canada_goose.mp3',
+  'Yellow-bellied sapsucker':   'audio/birds/red_bellied_woodpecker.mp3',
+  'Yellow-crowned night heron': 'audio/birds/ring_billed_gull.mp3',
+  'Yellow-rumped warbler':      'audio/birds/northern_waterthrush.mp3',
+};
+
+const MECH_AUDIO = {
+  'Sonic Burden Zone':      'audio/mech/urban_dense.mp3',
+  'Contested Soundscape':   'audio/mech/mixed_urban.mp3',
+  'Acoustic Void':          'audio/mech/light_traffic.mp3',
+  'Sonic Refuge':           'audio/mech/distant_city.mp3',
+  'No Data':                'audio/mech/distant_city.mp3',
+};
+
+const TYPE_COLORS = {
+  'Sonic Refuge':         '#4ade80',
+  'Contested Soundscape': '#facc15',
+  'Sonic Burden Zone':    '#f87171',
+  'Acoustic Void':        '#94a3b8',
+  'No Data':              '#1e293b',
+};
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+let currentFeature = null;
+let naturalAudio = null, mechAudio = null;
+let naturalPlaying = false, mechPlaying = false;
+let hoveredId = null, selectedId = null;
+
+// ── MAP ──────────────────────────────────────────────────────────────────────
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/dark-v11',
+  center: [-73.97, 40.70],
+  zoom: 10.5,
+  minZoom: 9,
+  maxZoom: 15,
+  pitchWithRotate: false,
+  dragRotate: false,
+});
+
+map.addControl(new mapboxgl.NavigationControl({ showCompass:false }), 'top-right');
+
+map.on('load', () => {
+  fetch('sonic_ecology_nyc_final.geojson')
+    .then(r => r.json())
+    .then(data => { initMap(data); updateCounts(data); })
+    .catch(() => {
+      document.getElementById('header').insertAdjacentHTML('beforeend',
+        '<p style="color:#f87171;margin-top:8px;font-size:11px;">Could not load sonic_ecology_nyc_final.geojson — place it in the same folder as this HTML file.</p>');
+    });
+});
+
+function initMap(data) {
+  map.addSource('grid', { type:'geojson', data, generateId:true });
+
+  map.addLayer({
+    id: 'grid-fill', type: 'fill', source: 'grid',
+    paint: {
+      'fill-color': ['match', ['get','sonic_type'],
+        'Sonic Refuge',         '#4ade80',
+        'Contested Soundscape', '#facc15',
+        'Sonic Burden Zone',    '#f87171',
+        'Acoustic Void',        '#94a3b8',
+        '#0f172a'],
+      'fill-opacity': ['case',
+        ['==',['get','sonic_type'],'No Data'], 0.05,
+        ['boolean',['feature-state','hover'],false], 0.78,
+        0.55],
+    }
+  });
+
+  map.addLayer({
+    id: 'grid-outline', type: 'line', source: 'grid',
+    paint: {
+      'line-color': ['case', ['boolean',['feature-state','hover'],false], 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0.04)'],
+      'line-width': ['case', ['boolean',['feature-state','hover'],false], 1.5, 0.3],
+    }
+  });
+
+  map.addLayer({
+    id: 'grid-selected', type: 'line', source: 'grid',
+    paint: {
+      'line-color': '#ffffff',
+      'line-width': 2,
+      'line-opacity': ['case', ['boolean',['feature-state','selected'],false], 1, 0]
+    }
+  });
+
+  const tip = document.getElementById('hover-tip');
+
+  map.on('mousemove', 'grid-fill', e => {
+    if (!e.features.length) return;
+    const f = e.features[0];
+    map.getCanvas().style.cursor = 'pointer';
+    if (hoveredId !== null) map.setFeatureState({source:'grid',id:hoveredId},{hover:false});
+    hoveredId = f.id;
+    map.setFeatureState({source:'grid',id:hoveredId},{hover:true});
+    const p = f.properties;
+    if (p.sonic_type !== 'No Data') {
+      tip.textContent = `${p.sonic_type}  ·  ${p.borough}  ·  ${p.bird_richness} spp.`;
+      tip.style.left = (e.point.x + 14) + 'px';
+      tip.style.top  = (e.point.y - 10) + 'px';
+      tip.classList.add('visible');
+    }
+  });
+
+  map.on('mouseleave', 'grid-fill', () => {
+    map.getCanvas().style.cursor = '';
+    if (hoveredId !== null) map.setFeatureState({source:'grid',id:hoveredId},{hover:false});
+    hoveredId = null;
+    tip.classList.remove('visible');
+  });
+
+  map.on('click', 'grid-fill', e => {
+    if (!e.features.length) return;
+    const f = e.features[0];
+    if (f.properties.sonic_type === 'No Data') return;
+    if (selectedId !== null) map.setFeatureState({source:'grid',id:selectedId},{selected:false});
+    selectedId = f.id;
+    map.setFeatureState({source:'grid',id:selectedId},{selected:true});
+    stopAllAudio();
+    showPanel(f.properties);
+  });
+
+  map.on('click', e => {
+    const hit = map.queryRenderedFeatures(e.point, {layers:['grid-fill']});
+    if (!hit.length) closePanel();
+  });
+}
+
+// ── PANEL ────────────────────────────────────────────────────────────────────
+function showPanel(p) {
+  currentFeature = p;
+  const color = TYPE_COLORS[p.sonic_type] || '#94a3b8';
+
+  document.getElementById('popup-type-bar').style.background = color;
+  document.getElementById('popup-type-label').textContent = p.sonic_type.toUpperCase();
+  document.getElementById('popup-type-label').style.color = color;
+  document.getElementById('popup-borough').textContent = p.borough;
+
+  setBar('natural', p.natural_score, color);
+  setBar('mech',    p.mech_score,    '#f87171');
+  setBar('ej',      p.ej_burden,     '#a78bfa');
+
+  document.getElementById('stat-birds').textContent  = p.bird_richness + ' species';
+  document.getElementById('stat-trees').textContent  = Number(p.tree_count).toLocaleString();
+  document.getElementById('stat-noise').textContent  = Number(p.noise_complaints).toLocaleString();
+  document.getElementById('stat-income').textContent = p.median_income > 0
+    ? '$' + Math.round(p.median_income / 1000) + 'k (borough median)' : '—';
+
+  const hasBird = p.top_bird && p.top_bird !== 'None recorded';
+  document.getElementById('stat-top-bird').textContent = hasBird ? p.top_bird : 'No birds recorded here';
+
+  const birdFile = hasBird ? (BIRD_AUDIO[p.top_bird] || 'audio/birds/american_robin.mp3') : 'audio/birds/american_robin.mp3';
+  const mechFile = MECH_AUDIO[p.sonic_type] || 'audio/mech/distant_city.mp3';
+
+  document.getElementById('audio-note').innerHTML =
+    `Natural: <em>${hasBird ? p.top_bird : 'ambient birdsong'}</em> &nbsp;·&nbsp; Mechanical: <em>${p.sonic_type.toLowerCase()}</em>`;
+
+  resetAudioBtns();
+  document.getElementById('popup-panel').classList.add('visible');
+}
+
+function setBar(id, val, color) {
+  document.getElementById('bar-' + id).style.width = Math.round(val) + '%';
+  document.getElementById('bar-' + id).style.background = color;
+  document.getElementById('val-' + id).textContent = Math.round(val);
+}
+
+function closePanel() {
+  document.getElementById('popup-panel').classList.remove('visible');
+  stopAllAudio();
+  if (selectedId !== null) {
+    map.setFeatureState({source:'grid',id:selectedId},{selected:false});
+    selectedId = null;
+  }
+  currentFeature = null;
+}
+
+// ── AUDIO ────────────────────────────────────────────────────────────────────
+function playAudio(type) {
+  if (!currentFeature) return;
+  const p = currentFeature;
+
+  if (type === 'natural') {
+    if (naturalPlaying) { stopAudio('natural'); return; }
+    stopAudio('mech');
+    const hasBird = p.top_bird && p.top_bird !== 'None recorded';
+    const src = hasBird ? (BIRD_AUDIO[p.top_bird] || 'audio/birds/american_robin.mp3') : 'audio/birds/american_robin.mp3';
+    naturalAudio = new Audio(src);
+    naturalAudio.loop = true;
+    naturalAudio.volume = 0.8;
+    naturalAudio.play()
+      .then(() => { naturalPlaying = true; setPlaying('natural', true); })
+      .catch(() => { document.getElementById('audio-note').textContent = 'Audio file not found — check your audio/ folder.'; });
+  } else {
+    if (mechPlaying) { stopAudio('mech'); return; }
+    stopAudio('natural');
+    const src = MECH_AUDIO[p.sonic_type] || 'audio/mech/distant_city.mp3';
+    mechAudio = new Audio(src);
+    mechAudio.loop = true;
+    mechAudio.volume = 0.7;
+    mechAudio.play()
+      .then(() => { mechPlaying = true; setPlaying('mech', true); })
+      .catch(() => { document.getElementById('audio-note').textContent = 'Audio file not found — check your audio/ folder.'; });
+  }
+}
+
+function stopAudio(type) {
+  if (type === 'natural' && naturalAudio) {
+    naturalAudio.pause(); naturalAudio.currentTime = 0; naturalAudio = null;
+    naturalPlaying = false; setPlaying('natural', false);
+  }
+  if (type === 'mech' && mechAudio) {
+    mechAudio.pause(); mechAudio.currentTime = 0; mechAudio = null;
+    mechPlaying = false; setPlaying('mech', false);
+  }
+}
+
+function stopAllAudio() { stopAudio('natural'); stopAudio('mech'); }
+
+function setPlaying(type, on) {
+  document.getElementById('btn-' + type).classList.toggle('playing', on);
+  document.getElementById('icon-' + type).style.display = on ? 'none' : 'flex';
+  document.getElementById('eq-' + type).classList.toggle('active', on);
+}
+
+function resetAudioBtns() {
+  setPlaying('natural', false);
+  setPlaying('mech', false);
+}
+
+// ── LEGEND COUNTS ────────────────────────────────────────────────────────────
+function updateCounts(data) {
+  const c = {'Sonic Refuge':0,'Contested Soundscape':0,'Sonic Burden Zone':0,'Acoustic Void':0,'No Data':0};
+  data.features.forEach(f => { const t = f.properties.sonic_type; if (t in c) c[t]++; });
+  document.getElementById('cnt-refuge').textContent    = c['Sonic Refuge'].toLocaleString();
+  document.getElementById('cnt-contested').textContent = c['Contested Soundscape'].toLocaleString();
+  document.getElementById('cnt-burden').textContent    = c['Sonic Burden Zone'].toLocaleString();
+  document.getElementById('cnt-void').textContent      = c['Acoustic Void'].toLocaleString();
+  document.getElementById('cnt-nodata').textContent    = c['No Data'].toLocaleString();
+}
+
+// ── LEGEND FILTER ────────────────────────────────────────────────────────────
+let activeFilter = null;
+document.querySelectorAll('.legend-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const type = item.dataset.type;
+    if (activeFilter === type) {
+      activeFilter = null;
+      map.setFilter('grid-fill', null);
+      map.setFilter('grid-outline', null);
+      document.querySelectorAll('.legend-item').forEach(i => i.style.opacity = '1');
+    } else {
+      activeFilter = type;
+      const f = ['==', ['get','sonic_type'], type];
+      map.setFilter('grid-fill', f);
+      map.setFilter('grid-outline', f);
+      document.querySelectorAll('.legend-item').forEach(i => {
+        i.style.opacity = i.dataset.type === type ? '1' : '0.3';
+      });
+    }
+  });
+});
+</script>
+</body>
+</html>
