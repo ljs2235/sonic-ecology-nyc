@@ -178,6 +178,8 @@
       <div class="stat-item"><div class="sl">Street trees</div><div class="sv" id="stat-trees">—</div></div>
       <div class="stat-item"><div class="sl">Noise complaints</div><div class="sv" id="stat-noise">—</div></div>
       <div class="stat-item"><div class="sl">Median income</div><div class="sv" id="stat-income">—</div></div>
+      <div class="stat-item"><div class="sl">Poverty rate</div><div class="sv" id="stat-poverty">—</div></div>
+      <div class="stat-item"><div class="sl">Neighborhood</div><div class="sv" id="stat-nta" style="font-size:11px">—</div></div>
     </div>
     <div class="bird-row">
       <div class="bird-info">
@@ -352,12 +354,12 @@ const map = new mapboxgl.Map({
 map.addControl(new mapboxgl.NavigationControl({ showCompass:false }), 'top-right');
 
 map.on('load', () => {
-  fetch('sonic_ecology_nyc_final.geojson')
+  fetch('sonic_ecology_nyc_tract.geojson')
     .then(r => r.json())
     .then(data => { initMap(data); updateCounts(data); })
     .catch(() => {
       document.getElementById('header').insertAdjacentHTML('beforeend',
-        '<p style="color:#f87171;margin-top:8px;font-size:11px;">Could not load sonic_ecology_nyc_final.geojson — place it in the same folder as this HTML file.</p>');
+        '<p style="color:#f87171;margin-top:8px;font-size:11px;">Could not load sonic_ecology_nyc_tract.geojson — place it in the same folder as this HTML file.</p>');
     });
 });
 
@@ -456,8 +458,10 @@ function showPanel(p) {
   document.getElementById('stat-birds').textContent  = p.bird_richness + ' species';
   document.getElementById('stat-trees').textContent  = Number(p.tree_count).toLocaleString();
   document.getElementById('stat-noise').textContent  = Number(p.noise_complaints).toLocaleString();
+  document.getElementById('stat-poverty').textContent = p.poverty_pct != null ? p.poverty_pct + '%' : '—';
+  document.getElementById('stat-nta').textContent     = p.ntaname || '—';
   document.getElementById('stat-income').textContent = p.median_income > 0
-    ? '$' + Math.round(p.median_income / 1000) + 'k (borough median)' : '—';
+    ? '$' + Number(p.median_income).toLocaleString() + ' (tract)' : '—';
 
   const hasBird = p.top_bird && p.top_bird !== 'None recorded';
   document.getElementById('stat-top-bird').textContent = hasBird ? p.top_bird : 'No birds recorded here';
